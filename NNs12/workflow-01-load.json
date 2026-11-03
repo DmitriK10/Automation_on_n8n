@@ -1,0 +1,266 @@
+{
+  "name": "Урок 12 — RAG: загрузка базы знаний",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "load-trigger",
+      "name": "Ручной запуск",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "doc-1",
+              "name": "doc_text",
+              "value": "# КофеТочка — частые вопросы\n\n## О компании\n\nКофеТочка — российский интернет-магазин кофейного оборудования и аксессуаров. Мы работаем с 2019 года, продаём кофемашины, кофемолки, весы, темперы, фильтры и обжарочное зерно. Собственный сервисный центр находится в Москве, там же расположен склад.\n\n## Доставка\n\nПо Москве и Московской области доставляем курьером за 1–2 рабочих дня. Стоимость курьерской доставки — 490 рублей. При заказе от 15 000 рублей доставка по Москве бесплатная. Курьер привозит заказ в будни с 10:00 до 19:00, в субботу с 11:00 до 17:00.\n\nПо России отправляем транспортной компанией СДЭК, срок доставки — от 3 до 7 рабочих дней в зависимости от региона. Стоимость рассчитывается по тарифам перевозчика и показывается при оформлении заказа. Отслеживание посылки приходит на электронную почту после передачи груза в транспортную компанию.\n\n## Самовывоз\n\nЗабрать заказ самостоятельно можно со склада в Москве по адресу улица Складочная, дом 6, строение 3. Склад работает по будням с 10:00 до 20:00. Заказ хранится на складе 5 календарных дней с момента готовности. Для получения нужен номер заказа и документ, удостоверяющий личность.\n\n## Возврат и обмен\n\nВернуть товар надлежащего качества можно в течение 14 дней с момента получения. Условия возврата: товар не использовался, сохранена заводская упаковка, есть чек или номер заказа. Деньги возвращаем на ту же карту, с которой была оплата, в течение 10 рабочих дней после приёмки товара на складе.\n\nКофейное зерно и другие продукты питания возврату и обмену не подлежат, если упаковка вскрыта.\n\n## Гарантия\n\nНа всю технику действует гарантия 12 месяцев с даты получения заказа. На кофемашины собственной торговой марки КофеТочка гарантия составляет 24 месяца. Гарантия не распространяется на повреждения, вызванные использованием неочищенной воды, и на механические повреждения после передачи товара покупателю.\n\n## Оплата\n\nПринимаем банковские карты, переводы через систему быстрых платежей и оплату по счёту для юридических лиц. Для физических лиц доступна рассрочка на 6 месяцев без переплаты при заказе от 30 000 рублей. Рассрочка оформляется прямо на сайте при оформлении заказа.\n\n## Сервис и обслуживание\n\nВыезд мастера по Москве стоит 1 500 рублей и включает диагностику. Профилактическая чистка кофемашины — 3 500 рублей. Если по итогам диагностики клиент заказывает ремонт, стоимость выезда засчитывается в счёт ремонта.\n\n## Подписка на зерно\n\nПодписка на свежеобжаренное зерно стоит 1 200 рублей в месяц и включает 250 граммов зерна на выбор из шести позиций. Доставка в рамках подписки бесплатная. Подписку можно приостановить на один месяц или отменить в любой момент в личном кабинете.\n",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "load-doc",
+      "name": "Документ базы знаний",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        271,
+        480
+      ],
+      "notes": "Текст FAQ. В реальной задаче сюда читается файл."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Режем документ на фрагменты с перекрытием.\nconst text = $json.doc_text || '';\nconst SIZE = 500;     // сколько символов в чанке\nconst OVERLAP = 80;   // сколько символов перекрытия\n\n// сначала по абзацам, чтобы не рвать смысл посередине\nconst paras = text.split(/\\n{2,}/).map(s => s.trim()).filter(Boolean);\n\nconst raw = [];\nlet buf = '';\nfor (const p of paras) {\n  if (!buf) { buf = p; continue; }\n  if ((buf + '\\n\\n' + p).length <= SIZE) { buf += '\\n\\n' + p; continue; }\n  raw.push(buf);\n  buf = p;\n}\nif (buf) raw.push(buf);\n\n// абзац длиннее чанка — режем принудительно, с перекрытием\nconst pieces = [];\nfor (const p of raw) {\n  if (p.length <= SIZE) { pieces.push(p); continue; }\n  let i = 0;\n  while (i < p.length) {\n    pieces.push(p.slice(i, i + SIZE));\n    if (i + SIZE >= p.length) break;\n    i += SIZE - OVERLAP;\n  }\n}\n\n// перекрытие на стыках: подклеиваем хвост предыдущего фрагмента\nconst out = pieces.map((p, i) => {\n  const tail = i > 0 ? pieces[i - 1].slice(-OVERLAP) : '';\n  return { json: { chunk_index: i, text: (tail ? tail + ' ' : '') + p } };\n});\nreturn out;"
+      },
+      "id": "нарезка-на-чанки",
+      "name": "Нарезка на чанки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        463,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Собираем все фрагменты в один запрос к модели эмбеддингов.\nconst chunks = $('Нарезка на чанки').all().map(i => i.json.text);\nreturn [{ json: { texts: chunks, count: chunks.length } }];"
+      },
+      "id": "собрать-пачку",
+      "name": "Собрать пачку",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        654,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.proxyapi.ru/openai/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify($json.texts) }}\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "эмбеддинги-фрагментов",
+      "name": "Эмбеддинги фрагментов",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        846,
+        480
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_EMBEDDING_CRED_ID",
+          "name": "Эмбеддинги ProxyAPI (RAG)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Склеиваем векторы с исходными текстами — в Qdrant поедет и то, и другое.\nconst texts = $('Собрать пачку').first().json.texts;\nconst vecs = $json.data.map(d => d.embedding);\nif (vecs.length !== texts.length) {\n  throw new Error('векторов ' + vecs.length + ', а фрагментов ' + texts.length);\n}\nconst points = texts.map((t, i) => ({\n  id: i + 1,\n  vector: vecs[i],\n  payload: { text: t, chunk_index: i, source: 'knowledge-base.md' },\n}));\nreturn [{ json: { points, count: points.length, dim: vecs[0].length } }];"
+      },
+      "id": "собрать-точки",
+      "name": "Собрать точки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1037,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://qdrant-lab:6333/collections/n8n-lab-kb/points?wait=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"points\": {{ JSON.stringify($json.points) }}\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "qdrant:-загрузить-точки",
+      "name": "Qdrant: загрузить точки",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1229,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json.result || $json;\nreturn [{ json: {\n  загружено_фрагментов: $('Собрать точки').first().json.count,\n  размерность: $('Собрать точки').first().json.dim,\n  коллекция: 'n8n-lab-kb',\n  статус: r.status || 'ok',\n  время_мс: r.time,\n} }];"
+      },
+      "id": "итог-загрузки",
+      "name": "Итог загрузки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Ветка загрузки\n**Документ → чанки → эмбеддинги → Qdrant**\n\n1. Текст FAQ лежит прямо в ноде «Документ».\n2. Режем на фрагменты по 500 символов с перекрытием 80 — чтобы смысл не терялся на стыках.\n3. Все фрагменты уходят одним запросом в модель эмбеддингов.\n4. Каждый вектор склеивается со своим текстом и едет в Qdrant.\n\nЗапускается вручную — один раз на документ.",
+        "height": 320,
+        "width": 460,
+        "color": 5
+      },
+      "id": "load-note",
+      "name": "Заметка — ветка загрузки",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Ручной запуск": {
+      "main": [
+        [
+          {
+            "node": "Документ базы знаний",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Документ базы знаний": {
+      "main": [
+        [
+          {
+            "node": "Нарезка на чанки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нарезка на чанки": {
+      "main": [
+        [
+          {
+            "node": "Собрать пачку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Собрать пачку": {
+      "main": [
+        [
+          {
+            "node": "Эмбеддинги фрагментов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Эмбеддинги фрагментов": {
+      "main": [
+        [
+          {
+            "node": "Собрать точки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Собрать точки": {
+      "main": [
+        [
+          {
+            "node": "Qdrant: загрузить точки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant: загрузить точки": {
+      "main": [
+        [
+          {
+            "node": "Итог загрузки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

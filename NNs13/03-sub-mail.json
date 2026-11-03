@@ -1,0 +1,125 @@
+{
+  "name": "Урок 13 — Subworkflow «Отправка результата на почту»",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Subworkflow «Отправка результата на почту»\n\nПереиспользуемый блок: любой сценарий передаёт to, subject, text — и получает готовое письмо.\nВход: to, subject, text\nВыход: sent, to, subject",
+        "height": 220,
+        "width": 520,
+        "color": 5
+      },
+      "id": "note-96796688",
+      "name": "Заметка — Subworkflow «Отправка результата на почт",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "sw-mail-start",
+      "name": "Старт отправки",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Subworkflow отправки: принимает to, subject, text.\n// mail_body — готовый текст письма; text — короткий ответ для чата.\nconst to = ($json.to || 'owner@n8n-lab.local').toString();\nconst subject = ($json.subject || 'Письмо из центра автоматизации').toString();\nconst text = ($json.mail_body || $json.text || '').toString();\nreturn [{ json: { to, subject, text } }];"
+      },
+      "id": "sw-mail-prep",
+      "name": "Подготовка письма",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "manager@n8n-lab.local",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "sw-mail-send",
+      "name": "Письмо",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        540,
+        360
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Hw08SmtpMail0001",
+          "name": "SMTP — отправка писем (n8n-lab)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Возвращаем основному сценарию короткий отчёт об отправке.\nreturn [{\n  json: {\n    sent: true,\n    to: $('Подготовка письма').first().json.to,\n    subject: $('Подготовка письма').first().json.subject,\n  },\n}];"
+      },
+      "id": "sw-mail-out",
+      "name": "Итог отправки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Старт отправки": {
+      "main": [
+        [
+          {
+            "node": "Подготовка письма",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка письма": {
+      "main": [
+        [
+          {
+            "node": "Письмо",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Письмо": {
+      "main": [
+        [
+          {
+            "node": "Итог отправки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow",
+    "errorWorkflow": "Hw13ErrorHook001"
+  },
+  "id": "Hw13SendMail001"
+}

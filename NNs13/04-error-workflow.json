@@ -1,0 +1,98 @@
+{
+  "name": "Урок 13 — Error Workflow (уведомление о сбоях)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Error Workflow\n\nПривязан к основному сценарию и к обоим Subworkflow.\nЛовит ошибку из любого из них и пишет письмо:\nсценарий, нода, текст ошибки, режим запуска, ID выполнения.",
+        "height": 220,
+        "width": 520,
+        "color": 3
+      },
+      "id": "note-69011677",
+      "name": "Заметка — Error Workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        60
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "err-trigger",
+      "name": "Перехват ошибки",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        60,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Error Trigger отдаёт данные о сбое. Разбираем их аккуратно:\n// какие именно поля заполнены, зависит от версии n8n.\nconst wf = $json.workflow || {};\nconst ex = $json.execution || {};\nconst err = ex.error || $json.error || {};\nconst trigger = $json.trigger || {};\n\nfunction nodeNameOf() {\n  if (err.node && typeof err.node === 'object') return err.node.name || err.node.type || 'неизвестна';\n  if (typeof err.node === 'string' && err.node) return err.node;\n  if (ex.lastNodeExecuted) return ex.lastNodeExecuted;\n  if (trigger && (trigger.name || trigger.type)) return trigger.name || trigger.type;\n  return 'неизвестна';\n}\n\nconst workflowName = wf.name || ('id ' + (wf.id || 'неизвестен'));\nconst nodeName = nodeNameOf();\nconst message = err.message || err.description || 'описание не передано';\nconst execId = ex.id || 'неизвестен';\nconst mode = ex.mode || 'неизвестен';\n\nconst text = [\n  'Сценарий: ' + workflowName,\n  'Нода со сбоем: ' + nodeName,\n  'Ошибка: ' + message,\n  'Режим запуска: ' + mode,\n  'ID выполнения: ' + execId,\n  'Время: ' + new Date().toLocaleString('ru-RU'),\n  '',\n  'Откройте Executions в n8n и найдите выполнение ' + execId + '.',\n].join('\\n');\n\nreturn [{\n  json: {\n    subject: 'Сбой автоматизации: ' + workflowName,\n    text,\n    workflow: workflowName,\n    node: nodeName,\n    execution: execId,\n  },\n}];"
+      },
+      "id": "err-parse",
+      "name": "Разбор ошибки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "manager@n8n-lab.local",
+        "toEmail": "owner@n8n-lab.local",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "err-mail",
+      "name": "Письмо об ошибке",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        540,
+        360
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Hw08SmtpMail0001",
+          "name": "SMTP — отправка писем (n8n-lab)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Перехват ошибки": {
+      "main": [
+        [
+          {
+            "node": "Разбор ошибки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбор ошибки": {
+      "main": [
+        [
+          {
+            "node": "Письмо об ошибке",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow"
+  },
+  "id": "Hw13ErrorHook001"
+}

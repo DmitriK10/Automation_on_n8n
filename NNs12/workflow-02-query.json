@@ -1,0 +1,351 @@
+{
+  "name": "Урок 12 — RAG: помощник по базе знаний",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Здравствуйте! Спросите что-нибудь про доставку, возврат или гарантию.",
+        "options": {}
+      },
+      "id": "q-chat",
+      "name": "Чат",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        500
+      ],
+      "webhookId": "rag-chat-hw12"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Готовим случайный RqUID и запоминаем вопрос пользователя.\nconst u = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n  const r = Math.floor(Math.random() * 16);\n  return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n});\nreturn [{ json: { rquid: u, query: $json.chatInput || '' } }];"
+      },
+      "id": "подготовка-запроса",
+      "name": "Подготовка запроса",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        248,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "RqUID",
+              "value": "={{ $json.rquid }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "GIGACHAT_API_PERS"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          },
+          "allowUnauthorizedCerts": true
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "токен-gigachat",
+      "name": "Токен GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        415,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_GIGACHAT_CRED_ID",
+          "name": "GigaChat — ключ авторизации (RAG)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.proxyapi.ru/openai/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": [{{ JSON.stringify($('Подготовка запроса').first().json.query) }}]\n}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "эмбеддинги-вопроса",
+      "name": "Эмбеддинги вопроса",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        582,
+        500
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_EMBEDDING_CRED_ID",
+          "name": "Эмбеддинги ProxyAPI (RAG)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Вектор вопроса → тело запроса для Qdrant.\nconst vec = $json.data[0].embedding;\nreturn [{ json: { vector: vec, dim: vec.length } }];"
+      },
+      "id": "сборка-запроса",
+      "name": "Сборка запроса",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://qdrant-lab:6333/collections/n8n-lab-kb/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($json.vector) }},\n  \"limit\": 4,\n  \"with_payload\": true\n}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "поиск-в-qdrant",
+      "name": "Поиск в Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        918,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Превращаем ответ Qdrant в чистый текст для модели.\nconst res = $json.result || {};\nconst hits = Array.isArray(res) ? res : (res.points || []);\nif (!hits.length) {\n  return [{ json: { found: false, context: '', top_score: 0, hits: 0 } }];\n}\nconst parts = hits.map((h, i) =>\n  '[' + (i + 1) + '] (близость ' + (h.score ?? 0).toFixed(3) + ')\\n' + ((h.payload || {}).text || '')\n);\nreturn [{\n  json: {\n    found: true,\n    hits: hits.length,\n    top_score: hits[0].score ?? 0,\n    context: parts.join('\\n\\n---\\n\\n'),\n  },\n}];"
+      },
+      "id": "подготовка-контекста",
+      "name": "Подготовка контекста",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1085,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Токен GigaChat').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"GigaChat\",\n  \"temperature\": 0.2,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"Ты — помощник интернет-магазина КофеТочка. Отвечай ТОЛЬКО по фрагментам базы знаний, которые даны ниже. Если ответа в них нет — так и скажи: \\\"В базе знаний нет информации по данному запросу\\\". Ничего не придумывай. Отвечай коротко: 1-3 предложения, по-русски.\" },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify(\"Вопрос клиента: \" + $('Подготовка запроса').first().json.query + \"\\n\\nФрагменты базы знаний:\\n\" + $json.context) }} }\n  ]\n}",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          },
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "ответ-gigachat",
+      "name": "Ответ GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1252,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ответ модели приводим к виду, который понимает окно чата.\nconst txt = ($json.choices && $json.choices[0] && $json.choices[0].message\n  && $json.choices[0].message.content) || 'Не удалось получить ответ.';\nreturn [{ json: { output: txt.trim(), text: txt.trim() } }];"
+      },
+      "id": "ответ-в-чат",
+      "name": "Ответ в чат",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Ветка ответов\n**Вопрос → вектор → поиск → контекст → ответ**\n\n1. Вопрос приходит из окна чата n8n.\n2. Токен GigaChat нужен только для финального ответа.\n3. Вопрос превращается в вектор той же моделью, что и документ.\n4. Qdrant отдаёт 4 ближайших фрагмента.\n5. Текст фрагментов уходит в модель как контекст.\n6. Системный промпт запрещает отвечать без опоры на контекст.",
+        "height": 340,
+        "width": 470,
+        "color": 4
+      },
+      "id": "q-note",
+      "name": "Заметка — ветка ответов",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Чат": {
+      "main": [
+        [
+          {
+            "node": "Подготовка запроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка запроса": {
+      "main": [
+        [
+          {
+            "node": "Токен GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Токен GigaChat": {
+      "main": [
+        [
+          {
+            "node": "Эмбеддинги вопроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Эмбеддинги вопроса": {
+      "main": [
+        [
+          {
+            "node": "Сборка запроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сборка запроса": {
+      "main": [
+        [
+          {
+            "node": "Поиск в Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Поиск в Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Подготовка контекста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка контекста": {
+      "main": [
+        [
+          {
+            "node": "Ответ GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ответ GigaChat": {
+      "main": [
+        [
+          {
+            "node": "Ответ в чат",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

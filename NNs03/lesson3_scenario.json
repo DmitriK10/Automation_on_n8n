@@ -1,0 +1,104 @@
+{
+  "name": "Урок 3 — Минимальный сценарий (3 ноды)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b1a11111-1111-1111-1111-111111111111",
+      "name": "1. Запуск вручную",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "Имя",
+              "value": "Анна",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "Город",
+              "value": "Москва",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "Курс",
+              "value": "n8n Start",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "b2a22222-2222-2222-2222-222222222222",
+      "name": "2. Данные студента",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 320]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Берём входящие данные из блока Input и собираем приветствие\nfor (const item of $input.all()) {\n  const name   = item.json['Имя'];\n  const city   = item.json['Город'];\n  const course = item.json['Курс'];\n\n  item.json.greeting = `Привет, ${name}! Рады видеть тебя из ${city} на курсе ${course}`;\n}\n\nreturn $input.all();"
+      },
+      "id": "b3a33333-3333-3333-3333-333333333333",
+      "name": "3. Собираем приветствие",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 320]
+    },
+    {
+      "parameters": {
+        "content": "## Шаг 2 — Данные студента\nНода Set задаёт три фиксированных поля: **Имя**, **Город**, **Курс**.\nЭти значения передаются дальше в ноду Code, где подставляются в шаблон приветствия.\n\nЧтобы поменять тестовые данные — откройте ноду и отредактируйте значения полей.",
+        "height": 260,
+        "width": 340,
+        "color": 4
+      },
+      "id": "b4a44444-4444-4444-4444-444444444444",
+      "name": "Заметка — что делает шаг 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, 60]
+    }
+  ],
+  "connections": {
+    "1. Запуск вручную": {
+      "main": [
+        [
+          {
+            "node": "2. Данные студента",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Данные студента": {
+      "main": [
+        [
+          {
+            "node": "3. Собираем приветствие",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "homework-lesson-3"
+  },
+  "tags": []
+}

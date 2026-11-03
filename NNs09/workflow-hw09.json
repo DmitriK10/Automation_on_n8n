@@ -1,0 +1,815 @@
+{
+  "id": "Hw09ZayavkaPay01",
+  "name": "Урок 9 — Заявка → ИИ → таблица → оплата",
+  "active": false,
+  "isArchived": false,
+  "createdAt": "2026-10-31T21:30:00.000Z",
+  "updatedAt": "2026-10-31T21:30:00.000Z",
+  "versionId": "v0900000-0000-4000-8000-000000000001",
+  "versionCounter": 1,
+  "triggerCount": 1,
+  "description": "Урок 9: форма → ИИ → таблица → платёжная ссылка → письмо клиенту",
+  "sourceWorkflowId": null,
+  "activeVersionId": null,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Урок 9 — заявка → ИИ → таблица → платёж\n\nПорядок шагов повторяет маршрут урока:\n\n1. **Форма** принимает заявку (6 полей)\n2. **Проверка полей** — дешёвая проверка раньше дорогой\n3. **GigaChat** возвращает строгий JSON\n4. **Парсер** проверяет JSON и ставит приоритет\n5. **Запись в CRM** со статусом «Ожидает оплату»\n6. **Платёжная ссылка** ЮMoney + проверка HEAD\n7. **Письмо клиенту** со ссылкой\n8. **Обновление статуса** в таблице",
+        "height": 620,
+        "width": 420
+      },
+      "id": "a0000000-0000-4000-8000-000000000000",
+      "name": "Заметка — карта сценария",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "path": "zayavka-oplata",
+        "formTitle": "Заявка на услугу",
+        "formDescription": "Заполните форму — пришлём счёт на оплату на указанную почту.",
+        "formFields": {
+          "values": [
+            {
+              "fieldName": "name",
+              "fieldLabel": "Имя",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Например, Анна"
+            },
+            {
+              "fieldName": "contact",
+              "fieldLabel": "Контакт (телефон или ник в мессенджере)",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "+7 900 000-00-00 или @anna"
+            },
+            {
+              "fieldName": "email",
+              "fieldLabel": "Электронная почта",
+              "fieldType": "email",
+              "requiredField": true,
+              "placeholder": "you@example.com"
+            },
+            {
+              "fieldName": "service",
+              "fieldLabel": "Услуга",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Консультация по автоматизации"
+                  },
+                  {
+                    "option": "Настройка сценария n8n"
+                  },
+                  {
+                    "option": "Интеграция с CRM"
+                  },
+                  {
+                    "option": "Обучение команды"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldName": "amount",
+              "fieldLabel": "Сумма, руб.",
+              "fieldType": "number",
+              "requiredField": true,
+              "placeholder": "15000"
+            },
+            {
+              "fieldName": "comment",
+              "fieldLabel": "Комментарий клиента",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "Опишите задачу своими словами"
+            }
+          ]
+        },
+        "responseMode": "onReceived",
+        "options": {
+          "respondWithOptions": {
+            "values": {
+              "respondWith": "text",
+              "formSubmittedText": "Спасибо! Заявка принята — счёт на оплату придёт на указанную почту."
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000001",
+      "name": "1. Форма заявки",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -40,
+        300
+      ],
+      "webhookId": "zayavka-oplata"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.contact }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c4",
+              "leftValue": "={{ $json.service }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c5",
+              "leftValue": "={{ $json.amount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "c6",
+              "leftValue": "={{ $json.comment }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000002",
+      "name": "2. Проверка полей",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "RqUID",
+              "value": "={{ Array.from({length:36}, (_, i) => [8,13,18,23].includes(i) ? '-' : (i === 14 ? '4' : (i === 19 ? '89ab'[Math.floor(Math.random() * 4)] : '0123456789abcdef'[Math.floor(Math.random() * 16)]))).join('') }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "GIGACHAT_API_PERS"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000003",
+      "name": "3. Токен GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw07GigaChat0001",
+          "name": "GigaChat — ключ авторизации (Basic)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"GigaChat\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ты помощник по обработке входящих заявок. Твоя задача — проанализировать заявку и вернуть структурированный результат строго в формате JSON, без markdown и без пояснений.\\n\\nВерни объект ровно с такими полями:\\n{\\n  \\\"client_name\\\": \\\"\\\",\\n  \\\"request_type\\\": \\\"\\\",\\n  \\\"request_summary\\\": \\\"\\\",\\n  \\\"payment_description\\\": \\\"\\\",\\n  \\\"amount\\\": \\\"\\\",\\n  \\\"priority\\\": \\\"\\\"\\n}\\n\\nПравила:\\n- client_name — имя клиента как в заявке, не переформатируй;\\n- request_type — одно из: Консультация, Услуга, Поддержка;\\n- request_summary — одно короткое предложение о том, что нужно клиенту, своими словами;\\n- payment_description — формулировка для назначения платежа, до 100 символов;\\n- amount — сумма ровно та, что пришла в заявке, числом без пробелов и знаков;\\n- priority — одно из: высокий, средний, низкий;\\n- НЕ выдумывай цены, скидки, сроки, гарантии и условия, которых нет в заявке.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify('Данные заявки:\\nИмя клиента: ' + $('1. Форма заявки').item.json.name + '\\nКонтакт: ' + $('1. Форма заявки').item.json.contact + '\\nЭлектронная почта: ' + $('1. Форма заявки').item.json.email + '\\nУслуга: ' + $('1. Форма заявки').item.json.service + '\\nСумма: ' + $('1. Форма заявки').item.json.amount + '\\nКомментарий: ' + $('1. Форма заявки').item.json.comment) }}\n    }\n  ],\n  \"temperature\": 0.1,\n  \"max_tokens\": 500,\n  \"stream\": false\n}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 90000
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000004",
+      "name": "4. GigaChat — разбор заявки",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Разбор ответа модели и три проверки из урока:\n// 1) JSON распарсился, 2) обязательные поля на месте,\n// 3) сумма и контакты не переформатированы моделью.\n// Плюс приоритет заявки.\n\nconst form = $('1. Форма заявки').item.json;\nconst raw = $json.choices[0].message.content;\n\n// модель иногда оборачивает JSON в ```json … ``` — снимаем обёртку\nlet text = String(raw).trim();\ntext = text.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\n\nlet data;\ntry {\n  data = JSON.parse(text);\n} catch (e) {\n  throw new Error('Модель вернула не JSON: ' + text.slice(0, 200));\n}\n\nconst REQUIRED = ['client_name', 'request_type', 'request_summary',\n                  'payment_description', 'amount', 'priority'];\nconst missing = REQUIRED.filter(k => data[k] === undefined || data[k] === null || String(data[k]).trim() === '');\nif (missing.length) {\n  throw new Error('В ответе модели нет полей: ' + missing.join(', '));\n}\n\n// сверка суммы: модель не должна её менять\nconst amountForm = Number(String(form.amount).replace(/[^0-9.,]/g, '').replace(',', '.'));\nconst amountAi = Number(String(data.amount).replace(/[^0-9.,]/g, '').replace(',', '.'));\nif (!isFinite(amountAi) || amountAi !== amountForm) {\n  throw new Error('Сумма не совпала: в заявке ' + amountForm + ', в ответе модели ' + data.amount);\n}\n\n// сверка контактов: почта и телефон/ник должны остаться как в заявке\nif (String(data.client_name).trim() !== String(form.name).trim()) {\n  throw new Error('Имя изменено моделью: ' + data.client_name + ' вместо ' + form.name);\n}\n\n// приоритет: модель может вернуть свой, но значение должно быть из списка\nconst PRIORITIES = ['высокий', 'средний', 'низкий'];\nlet priority = String(data.priority).toLowerCase().trim();\nif (!PRIORITIES.includes(priority)) {\n  priority = 'средний';\n}\n\nreturn [{\n  json: {\n    data: {\n      client_name: String(form.name).trim(),\n      contact: String(form.contact).trim(),\n      email: String(form.email).trim(),\n      request_type: String(data.request_type).trim(),\n      request_summary: String(data.request_summary).trim(),\n      payment_description: String(data.payment_description).trim(),\n      amount: amountForm,\n      priority: priority,\n    },\n    // исходный ответ модели — для отчёта и отладки\n    model_raw: text,\n  }\n}];"
+      },
+      "id": "a0000000-0000-4000-8000-000000000005",
+      "name": "5. Парсинг и проверка JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://nocodb:8080/api/v2/tables/mqpogc3flc6trmz/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ \"Имя\": $('5. Парсинг и проверка JSON').item.json.data.client_name, \"Контакт\": $('5. Парсинг и проверка JSON').item.json.data.contact, \"Адрес электронной почты\": $('5. Парсинг и проверка JSON').item.json.data.email, \"Тип заявки\": $('5. Парсинг и проверка JSON').item.json.data.request_type, \"Описание\": $('5. Парсинг и проверка JSON').item.json.data.request_summary, \"Сумма\": $('5. Парсинг и проверка JSON').item.json.data.amount, \"Статус\": \"Ожидает оплату\", \"Дата\": $now.toFormat('yyyy-MM-dd') }]) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a0000000-0000-4000-8000-000000000006",
+      "name": "6. Запись в CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw05NocoDb000001",
+          "name": "NocoDB API token (HTTP header)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "receiver",
+              "value": "4100118895710219",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "sum",
+              "value": "={{ $('5. Парсинг и проверка JSON').item.json.data.amount }}",
+              "type": "number"
+            },
+            {
+              "id": "s3",
+              "name": "label",
+              "value": "=hw09-{{ $('5. Парсинг и проверка JSON').item.json.data.client_name }}-{{ $now.toFormat('yyyyMMdd-HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "targets",
+              "value": "={{ $('5. Парсинг и проверка JSON').item.json.data.payment_description }}",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "recordId",
+              "value": "={{ $json.Id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000007",
+      "name": "7. Параметры платежа",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "p1",
+              "leftValue": "={{ $json.sum }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "p2",
+              "leftValue": "={{ $json.targets }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "p3",
+              "leftValue": "={{ $json.receiver }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000008",
+      "name": "8. Проверка суммы",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "u1",
+              "name": "payment_url",
+              "value": "=https://yoomoney.ru/quickpay/confirm.xml?receiver={{ $json.receiver }}&quickpay-form=button&targets={{ encodeURIComponent($json.targets) }}&paymentType=AC&sum={{ $json.sum }}&label={{ encodeURIComponent($json.label) }}",
+              "type": "string"
+            },
+            {
+              "id": "u2",
+              "name": "recordId",
+              "value": "={{ $json.recordId }}",
+              "type": "number"
+            },
+            {
+              "id": "u3",
+              "name": "sum",
+              "value": "={{ $json.sum }}",
+              "type": "number"
+            },
+            {
+              "id": "u4",
+              "name": "targets",
+              "value": "={{ $json.targets }}",
+              "type": "string"
+            },
+            {
+              "id": "u5",
+              "name": "label",
+              "value": "={{ $json.label }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-000000000009",
+      "name": "9. Собрать ссылку QuickPay",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.payment_url }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 30000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        },
+        "method": "GET"
+      },
+      "id": "a0000000-0000-4000-8000-00000000000a",
+      "name": "10. Проверка ссылки",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2120,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "GET без перехода по редиректу: 302 = форма оплаты жива. Ответ 302 приходит как ошибка — её разбирает следующая нода.",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Разбор ответа проверки ссылки.\n// ЮMoney на HEAD отвечает 302 — это норма, форма оплаты существует.\n// n8n показывает такой ответ как ошибку, поэтому трактуем явно.\n\nconst pay = $('9. Собрать ссылку QuickPay').item.json;\nconst res = $json;\n\nlet alive = false;\nlet reason = '';\n\nif (res.error) {\n  const msg = String(res.error.message || res.error);\n  // 302 в тексте ошибки = редирект на страницу оплаты, ссылка жива\n  if (msg.includes('302')) {\n    alive = true;\n    reason = 'HTTP 302 — форма оплаты отвечает редиректом';\n  } else {\n    reason = 'Ошибка запроса: ' + msg.slice(0, 120);\n  }\n} else if (res.statusCode === 200 || res.statusCode === 302) {\n  alive = true;\n  reason = 'HTTP ' + res.statusCode + ' — форма оплаты отвечает';\n} else {\n  reason = 'Неожиданный ответ: HTTP ' + (res.statusCode ?? 'нет');\n}\n\nreturn [{\n  json: {\n    payment_url: pay.payment_url,\n    recordId: pay.recordId,\n    sum: pay.sum,\n    targets: pay.targets,\n    label: pay.label,\n    link_ok: alive,\n    link_check: reason,\n  }\n}];"
+      },
+      "id": "a0000000-0000-4000-8000-000000000010",
+      "name": "10a. Разбор проверки ссылки",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "ymd@yandex.ru",
+        "toEmail": "={{ $('5. Парсинг и проверка JSON').item.json.data.email }}",
+        "subject": "=Счёт на оплату: {{ $('5. Парсинг и проверка JSON').item.json.data.payment_description }}",
+        "emailFormat": "text",
+        "text": "={{ $('11. Письмо от ИИ').item.json.choices[0].message.content }}\n\nСсылка на оплату: {{ $('9. Собрать ссылку QuickPay').item.json.payment_url }}\n\nЕсли ссылка не открывается — ответьте на это письмо, пришлём новую.",
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-00000000000b",
+      "name": "12. Письмо клиенту",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2600,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Hw08YandexSmtp01",
+          "name": "Яндекс.Почта — ymd@yandex.ru"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('3. Токен GigaChat').item.json.access_token }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"GigaChat\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Ты пишешь короткие, тёплые, но профессиональные письма клиентам от лица компании. На «вы». Без рекламных формулировок. Без эмодзи. Без подписи. Без темы письма. Не выдумывай детали — используй только то, что прямо есть в данных. Без markdown.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify('Напиши клиенту короткое письмо (4–6 предложений).\\n\\nДанные:\\n- Имя клиента: ' + $('5. Парсинг и проверка JSON').item.json.data.client_name + '\\n- Что заказал: ' + $('5. Парсинг и проверка JSON').item.json.data.request_summary + '\\n- Сумма: ' + $('5. Парсинг и проверка JSON').item.json.data.amount + ' руб.\\n\\nСтруктура письма:\\n1) приветствие по имени\\n2) подтверждение, что заявка принята\\n3) краткое упоминание услуги и суммы\\n4) фраза, что ссылка на оплату ниже и после оплаты с клиентом свяжется менеджер\\n\\nВерни только текст письма, без темы и подписи.') }}\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 500,\n  \"stream\": false\n}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 90000
+        }
+      },
+      "id": "a0000000-0000-4000-8000-00000000000c",
+      "name": "11. Письмо от ИИ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2360,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "http://nocodb:8080/api/v2/tables/mqpogc3flc6trmz/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify([{ \"Id\": $('9. Собрать ссылку QuickPay').item.json.recordId, \"Статус\": \"Ссылка отправлена\", \"Платёжная ссылка\": $('9. Собрать ссылку QuickPay').item.json.payment_url }]) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a0000000-0000-4000-8000-00000000000d",
+      "name": "13. Статус в CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2840,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw05NocoDb000001",
+          "name": "NocoDB API token (HTTP header)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Ветка ошибки\n\nСюда попадают заявки, не прошедшие проверку полей или проверку суммы.\n\nПисьмо не отправляется, платёжная ссылка не создаётся — деньги клиент оплатить не сможет.",
+        "height": 200,
+        "width": 380
+      },
+      "id": "a0000000-0000-4000-8000-00000000000e",
+      "name": "Заметка — ветка ошибки",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "status",
+              "value": "ошибка валидации",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "reason",
+              "value": "Заявка не прошла проверку обязательных полей или суммы",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a0000000-0000-4000-8000-00000000000f",
+      "name": "2a. Ошибка валидации",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "1. Форма заявки": {
+      "main": [
+        [
+          {
+            "node": "2. Проверка полей",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Проверка полей": {
+      "main": [
+        [
+          {
+            "node": "3. Токен GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "2a. Ошибка валидации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Токен GigaChat": {
+      "main": [
+        [
+          {
+            "node": "4. GigaChat — разбор заявки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. GigaChat — разбор заявки": {
+      "main": [
+        [
+          {
+            "node": "5. Парсинг и проверка JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. Парсинг и проверка JSON": {
+      "main": [
+        [
+          {
+            "node": "6. Запись в CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Запись в CRM": {
+      "main": [
+        [
+          {
+            "node": "7. Параметры платежа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Параметры платежа": {
+      "main": [
+        [
+          {
+            "node": "8. Проверка суммы",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8. Проверка суммы": {
+      "main": [
+        [
+          {
+            "node": "9. Собрать ссылку QuickPay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "2a. Ошибка валидации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9. Собрать ссылку QuickPay": {
+      "main": [
+        [
+          {
+            "node": "10. Проверка ссылки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10. Проверка ссылки": {
+      "main": [
+        [
+          {
+            "node": "10a. Разбор проверки ссылки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11. Письмо от ИИ": {
+      "main": [
+        [
+          {
+            "node": "12. Письмо клиенту",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12. Письмо клиенту": {
+      "main": [
+        [
+          {
+            "node": "13. Статус в CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10a. Разбор проверки ссылки": {
+      "main": [
+        [
+          {
+            "node": "11. Письмо от ИИ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [],
+  "tags": [],
+  "shared": [],
+  "versionMetadata": {}
+}

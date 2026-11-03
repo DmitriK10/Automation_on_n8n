@@ -1,0 +1,212 @@
+{
+  "name": "Урок 13 — Subworkflow «Поиск в базе»",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Subworkflow «Поиск в базе»\n\nПереиспользуемый блок: вопрос -> вектор -> поиск в Qdrant -> готовый контекст.\nВызывается из основного сценария, сам по себе не запускается.\nВход: query\nВыход: query, context, hits, top_score",
+        "height": 240,
+        "width": 520,
+        "color": 5
+      },
+      "id": "note-63875639",
+      "name": "Заметка — Subworkflow «Поиск в базе»",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "sw-search-start",
+      "name": "Старт поиска",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// На вход приходит объект { query } из основного сценария.\n// Если вопроса нет, подставляем дежурный — так Subworkflow можно\n// вызывать и без подготовки.\nconst q = ($json.query || '').toString().trim();\nreturn [{ json: { query: q || 'условия возврата товара' } }];"
+      },
+      "id": "sw-search-prep",
+      "name": "Подготовка запроса",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.proxyapi.ru/openai/v1/embeddings",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": [{{ JSON.stringify($json.query) }}]\n}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "sw-search-emb",
+      "name": "Эмбеддинги вопроса",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        540,
+        380
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AcEr1hBxvjAjSNgo",
+          "name": "Эмбеддинги ProxyAPI (RAG)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Вектор вопроса -> тело запроса для Qdrant.\nconst vec = $json.data[0].embedding;\nreturn [{ json: { vector: vec, dim: vec.length } }];"
+      },
+      "id": "sw-search-vec",
+      "name": "Сборка запроса",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://qdrant-lab:6333/collections/n8n-lab-kb/points/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"vector\": {{ JSON.stringify($json.vector) }},\n  \"limit\": 4,\n  \"with_payload\": true\n}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "sw-search-qdrant",
+      "name": "Поиск в Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ответ Qdrant превращаем в чистый текст для модели.\n// Вопрос прокидываем дальше: его ждёт основной сценарий.\nconst query = $('Подготовка запроса').first().json.query;\nconst res = $json.result || {};\nconst hits = Array.isArray(res) ? res : (res.points || []);\nif (!hits.length) {\n  return [{ json: { query, found: false, hits: 0, top_score: 0, context: '' } }];\n}\nconst parts = hits.map((h, i) =>\n  '[' + (i + 1) + '] (близость ' + (h.score ?? 0).toFixed(3) + ')\\n' + ((h.payload || {}).text || '')\n);\nreturn [{\n  json: {\n    query,\n    found: true,\n    hits: hits.length,\n    top_score: hits[0].score ?? 0,\n    context: parts.join('\\n\\n---\\n\\n'),\n  },\n}];"
+      },
+      "id": "sw-search-ctx",
+      "name": "Подготовка контекста",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Старт поиска": {
+      "main": [
+        [
+          {
+            "node": "Подготовка запроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка запроса": {
+      "main": [
+        [
+          {
+            "node": "Эмбеддинги вопроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Эмбеддинги вопроса": {
+      "main": [
+        [
+          {
+            "node": "Сборка запроса",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сборка запроса": {
+      "main": [
+        [
+          {
+            "node": "Поиск в Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Поиск в Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Подготовка контекста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow",
+    "errorWorkflow": "Hw13ErrorHook001"
+  },
+  "id": "Hw13SearchKb0001"
+}

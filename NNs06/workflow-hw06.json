@@ -1,0 +1,103 @@
+{
+  "id": "Hw06HttpRequest01",
+  "name": "Урок 6 — GET и POST к NocoDB через HTTP Request",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ДЗ урока 6 — работа с API\n**GET и POST через HTTP Request.**\n\nТаблица «Студенты» в NocoDB, колонки `name`, `email`, `course`, `score`.\n\n1. **GET** — читает список записей из таблицы.\n2. **POST** — добавляет новую запись и возвращает её `Id`.\n\nКлюч `xc-token` лежит в Credentials «NocoDB Students (xc-token)», в самих нодах его нет.",
+        "height": 320,
+        "width": 560,
+        "color": 5
+      },
+      "id": "e0000000-0000-4000-8000-000000000000",
+      "name": "Заметка — что делает сценарий",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, -80]
+    },
+    {
+      "parameters": {},
+      "id": "e1000000-0000-4000-8000-000000000001",
+      "name": "Старт",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [560, 320]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://nocodb:8080/api/v2/tables/mf6f3pltabu2il7/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "e2000000-0000-4000-8000-000000000002",
+      "name": "1. GET — список студентов",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 320],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw06NocoDb000001",
+          "name": "NocoDB Students (xc-token)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://nocodb:8080/api/v2/tables/mf6f3pltabu2il7/records",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "[\n  {\n    \"name\": \"Мария Ковалёва\",\n    \"email\": \"maria.kovaleva@example.com\",\n    \"course\": \"n8n Старт\",\n    \"score\": 92\n  }\n]",
+        "options": {}
+      },
+      "id": "e3000000-0000-4000-8000-000000000003",
+      "name": "2. POST — новая запись",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1220, 320],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw06NocoDb000001",
+          "name": "NocoDB Students (xc-token)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Старт": {
+      "main": [
+        [
+          {
+            "node": "1. GET — список студентов",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. GET — список студентов": {
+      "main": [
+        [
+          {
+            "node": "2. POST — новая запись",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "homework-lesson-6"
+  },
+  "tags": []
+}

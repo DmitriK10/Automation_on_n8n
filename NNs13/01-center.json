@@ -1,0 +1,353 @@
+{
+  "name": "Урок 13 — Центр автоматизации",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Центр автоматизации\n\nДве точки входа: чат и расписание.\nРазвилка сводит их в один вопрос.\nПоиск и отправка письма вынесены в Subworkflow — их можно вызывать из других сценариев.",
+        "height": 220,
+        "width": 480,
+        "color": 5
+      },
+      "id": "note-23609502",
+      "name": "Заметка — Центр автоматизации",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Здравствуйте! Это центр автоматизации. Спросите что-нибудь про доставку, возврат или гарантию.",
+        "options": {}
+      },
+      "id": "main-chat",
+      "name": "Чат",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        60,
+        340
+      ],
+      "webhookId": "center-hw13-chat"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "main-cron",
+      "name": "Расписание",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        60,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Две точки входа сводим в одну ноду — это и есть развилка из урока.\n// Пришло из чата — берём вопрос пользователя.\n// Запуск по расписанию — подставляем дежурный вопрос из расписания.\nconst fromChat = ($json.chatInput || '').toString().trim();\nconst scheduled = \"Какие условия возврата товара надлежащего качества?\";\nconst query = fromChat || scheduled;\nreturn [{\n  json: {\n    query,\n    source: fromChat ? 'чат' : 'расписание',\n    got_at: new Date().toISOString(),\n  },\n}];"
+      },
+      "id": "main-entry",
+      "name": "Единая точка входа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Hw13SearchKb0001",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "main-call-search",
+      "name": "Поиск в базе",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        560,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GigaChat требует уникальный RqUID на каждый запрос токена.\nconst u = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n  const r = Math.floor(Math.random() * 16);\n  return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n});\nreturn [{ json: { rquid: u } }];"
+      },
+      "id": "main-rquid",
+      "name": "Подготовка токена",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "RqUID",
+              "value": "={{ $json.rquid }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "GIGACHAT_API_PERS"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "main-token",
+      "name": "Токен GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        440
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ppkK1prgCpngzY4c",
+          "name": "GigaChat — ключ авторизации (RAG)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Токен GigaChat').first().json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"GigaChat\",\n  \"temperature\": 0.2,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": \"Ты — помощник интернет-магазина КофеТочка. Отвечай ТОЛЬКО по фрагментам базы знаний, которые даны ниже. Если ответа в них нет — так и скажи: \\\"В базе знаний нет информации по данному запросу\\\". Не придумывай факты. Отвечай коротко: 1-3 предложения, по-русски.\" },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify(\"Вопрос клиента: \" + $('Поиск в базе').first().json.query + \"\\n\\nФрагменты базы знаний:\\n\" + $('Поиск в базе').first().json.context) }} }\n  ]\n}",
+        "options": {
+          "timeout": 90000,
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "neverError": false
+            }
+          }
+        }
+      },
+      "id": "main-answer",
+      "name": "Ответ GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Достаём текст ответа и собираем письмо для Subworkflow отправки.\nconst txt = ($json.choices && $json.choices[0] && $json.choices[0].message\n  && $json.choices[0].message.content) || 'Не удалось получить ответ.';\nconst found = $('Поиск в базе').first().json;\nconst query = found.query;\nconst text = txt.trim();\n\nconst body = [\n  'Вопрос: ' + query,\n  'Ответ: ' + text,\n  '',\n  'Найдено фрагментов: ' + found.hits + ' (близость ' + Number(found.top_score).toFixed(3) + ')',\n  'Источник: запуск ' + $('Единая точка входа').first().json.source,\n  'Время: ' + new Date().toLocaleString('ru-RU'),\n].join('\\n');\n\nreturn [{\n  json: {\n    text,\n    query,\n    to: \"owner@n8n-lab.local\",\n    subject: 'Центр автоматизации: ответ по базе знаний',\n    mail_body: body,\n  },\n}];"
+      },
+      "id": "main-parse",
+      "name": "Разбор ответа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Hw13SendMail001",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "main-call-mail",
+      "name": "Отправка на почту",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1760,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ответ в окно чата. Берём текст у предыдущего шага, а не у почтового\n// Subworkflow, иначе чат показал бы служебный отчёт об отправке.\nconst a = $('Разбор ответа').first().json;\nreturn [{ json: { output: a.text, text: a.text } }];"
+      },
+      "id": "main-final",
+      "name": "Ответ в чат",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "Чат": {
+      "main": [
+        [
+          {
+            "node": "Единая точка входа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Расписание": {
+      "main": [
+        [
+          {
+            "node": "Единая точка входа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Единая точка входа": {
+      "main": [
+        [
+          {
+            "node": "Поиск в базе",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Поиск в базе": {
+      "main": [
+        [
+          {
+            "node": "Подготовка токена",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Подготовка токена": {
+      "main": [
+        [
+          {
+            "node": "Токен GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Токен GigaChat": {
+      "main": [
+        [
+          {
+            "node": "Ответ GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ответ GigaChat": {
+      "main": [
+        [
+          {
+            "node": "Разбор ответа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбор ответа": {
+      "main": [
+        [
+          {
+            "node": "Отправка на почту",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отправка на почту": {
+      "main": [
+        [
+          {
+            "node": "Ответ в чат",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Moscow",
+    "errorWorkflow": "Hw13ErrorHook001"
+  },
+  "id": "Hw13CenterAuto01"
+}

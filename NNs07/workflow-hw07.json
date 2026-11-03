@@ -1,0 +1,291 @@
+{
+  "id": "Hw07GigaChat0001",
+  "name": "Урок 7 — GigaChat: JSON-ответ и приоритет обращения",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ДЗ урока 7 — нейросеть в сценарии\n**GigaChat → строгий JSON → приоритет обращения.**\n\n1. **Параметры промпта** — system prompt, текст жалобы, модель, температура.\n2. **access-токен** — POST на `ngw.devices.sberbank.ru`, обмен ключа на токен (живёт 30 минут).\n3. **Запрос к GigaChat** — POST на `gigachat.devices.sberbank.ru`, промпт уходит в модель.\n4. **Разбор JSON** — `JSON.parse` + снятие обёртки из ``` если модель её добавила.\n5. **IF** — `severity = high` или `critical` → срочно, остальное → стандартная обработка.\n\n**Ignore SSL Issues** включён в обеих HTTP-нодах: у Сбера сертификат Минцифры, которого n8n не знает.\n\nКлюч авторизации в сценарии не хранится.",
+        "height": 400,
+        "width": 620,
+        "color": 5
+      },
+      "id": "d0000000-0000-4000-8000-000000000000",
+      "name": "Заметка — как устроен сценарий",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -128
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "d1000000-0000-4000-8000-000000000001",
+      "name": "Старт",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        592,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d2000000-0000-4000-8000-00000000000a",
+              "name": "system_prompt",
+              "value": "Ты — классификатор обращений в службу поддержки. Оцени обращение клиента и верни СТРОГО валидный JSON без пояснений, без markdown и без текста вокруг. Формат: {\"severity\":\"\",\"category\":\"\",\"summary\":\"\",\"action\":\"\"}. Поле severity — только одно из: critical, high, medium, low. Поле category — только одно из: billing, tech, delivery, other. Поле summary — краткое содержание обращения одной фразой. Поле action — что нужно сделать сотруднику поддержки.",
+              "type": "string"
+            },
+            {
+              "id": "d2000000-0000-4000-8000-00000000000b",
+              "name": "user_prompt",
+              "value": "Здравствуйте. Деньги списались дважды, поддержка не отвечает уже неделю. Прошу срочно разобраться.",
+              "type": "string"
+            },
+            {
+              "id": "d2000000-0000-4000-8000-00000000000c",
+              "name": "model",
+              "value": "GigaChat",
+              "type": "string"
+            },
+            {
+              "id": "d2000000-0000-4000-8000-00000000000d",
+              "name": "temperature",
+              "value": 0.3,
+              "type": "number"
+            },
+            {
+              "id": "d2000000-0000-4000-8000-00000000000e",
+              "name": "scope",
+              "value": "GIGACHAT_API_PERS",
+              "type": "string"
+            },
+            {
+              "id": "d2000000-0000-4000-8000-00000000000f",
+              "name": "rquid",
+              "value": "={{ Array.from({length:36}, (_, i) => [8,13,18,23].includes(i) ? '-' : (i === 14 ? '4' : (i === 19 ? '89ab'[Math.floor(Math.random() * 4)] : '0123456789abcdef'[Math.floor(Math.random() * 16)]))).join('') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d3000000-0000-4000-8000-000000000002",
+      "name": "1. Параметры промпта",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        880,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "RqUID",
+              "value": "={{ $json.rquid }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "scope",
+              "value": "={{ $json.scope }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 60000
+        }
+      },
+      "id": "d4000000-0000-4000-8000-000000000003",
+      "name": "2. Получение access-токена",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        272
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Hw07GigaChat0001",
+          "name": "GigaChat — ключ авторизации (Basic)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": {{ JSON.stringify($('1. Параметры промпта').item.json.model) }},\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($('1. Параметры промпта').item.json.system_prompt) }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($('1. Параметры промпта').item.json.user_prompt) }} }\n  ],\n  \"temperature\": {{ $('1. Параметры промпта').item.json.temperature }}\n}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 90000
+        }
+      },
+      "id": "d5000000-0000-4000-8000-000000000004",
+      "name": "3. Запрос к GigaChat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Разбор ответа модели: снимаем возможную обёртку из ``` и парсим JSON.\nconst params = $('1. Параметры промпта').all();\nconst items = $input.all();\nconst out = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const raw = String(item.json?.choices?.[0]?.message?.content ?? '');\n\n  // 1. убрать markdown-обёртку, если модель её добавила\n  let text = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();\n\n  // 2. если вокруг JSON есть пояснения — взять только объект\n  const start = text.indexOf('{');\n  const end = text.lastIndexOf('}');\n  if (start >= 0 && end > start) {\n    text = text.slice(start, end + 1);\n  }\n\n  // 3. разобрать в объект\n  let data = {};\n  let parseError = null;\n  try {\n    data = JSON.parse(text);\n  } catch (e) {\n    parseError = e.message;\n  }\n\n  const src = params[i]?.json ?? {};\n  out.push({\n    json: {\n      complaint: src.user_prompt ?? '',\n      severity: String(data.severity ?? '').toLowerCase(),\n      category: String(data.category ?? '').toLowerCase(),\n      summary: data.summary ?? '',\n      action: data.action ?? '',\n      tokens_total: item.json?.usage?.total_tokens ?? null,\n      parsed_ok: parseError === null,\n      parse_error: parseError,\n      model_text: raw\n    }\n  });\n}\n\nreturn out;"
+      },
+      "id": "d6000000-0000-4000-8000-000000000005",
+      "name": "4. Разбор JSON-ответа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d7000000-0000-4000-8000-00000000000a",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "d7000000-0000-4000-8000-00000000000b",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "critical",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "d8000000-0000-4000-8000-000000000006",
+      "name": "5. Срочно? (IF)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        272
+      ]
+    }
+  ],
+  "connections": {
+    "Старт": {
+      "main": [
+        [
+          {
+            "node": "1. Параметры промпта",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Параметры промпта": {
+      "main": [
+        [
+          {
+            "node": "2. Получение access-токена",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Получение access-токена": {
+      "main": [
+        [
+          {
+            "node": "3. Запрос к GigaChat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Запрос к GigaChat": {
+      "main": [
+        [
+          {
+            "node": "4. Разбор JSON-ответа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Разбор JSON-ответа": {
+      "main": [
+        [
+          {
+            "node": "5. Срочно? (IF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "homework-lesson-7"
+  },
+  "tags": []
+}
