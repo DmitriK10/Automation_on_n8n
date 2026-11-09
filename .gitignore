@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# Виртуальные окружения
+venv/
+env/
+ENV/
+.venv/
+
+# Тесты и покрытие
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Редакторы и IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Логи и локальные данные
+*.log
+*.db
+db.sqlite3
+
+# Файлы с секретами
+.env
+*.env
+!.env.example
+
+# Временные файлы
+*.tmp
